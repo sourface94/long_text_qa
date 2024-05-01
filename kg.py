@@ -57,15 +57,15 @@ def get_entities(text: str) -> List[str]:
     return ents
 
 
-def get_subkg(kg: KGList, entities: List[str], threshold:float = 0.8) -> KGList:
+def get_subkg(kg: KGList, entities: List[str], threshold: float = 0.8) -> KGList:
     """Get sub graph that contains given entities"""
     # get embeddings
-    entity_embeddings = model.encode([e.entity_name + ' ' + e.entity_description for e in kg.entities])
+    entity_embeddings = model.encode([e for e in entities])
     node_embeddings = model.encode([e.entity_name + ' ' + e.entity_description for e in kg.entities])
     
     # get kg entities that appear in enetities by using simialrity threshold as a proxy
     sim = cosine_similarity(node_embeddings, entity_embeddings)
-    indices = np.argwhere(np.max(sim, axis=1) > threshold).flatten()
+    indices = np.argwhere(np.max(sim, axis=1) >= threshold).flatten()
     kg_entities = [kg.entities[i] for i in indices]
     kg_relationships = []
     for r in kg.relationships:
