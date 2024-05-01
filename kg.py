@@ -2,11 +2,18 @@ import json
 from typing import List, Optional
 
 import guidance
+import numpy as np
+import spacy
 from guidance import models
+from sentence_transformers import SentenceTransformer
+from sklearn.metrics.pairwise import cosine_similarity
 
 from prompts import node_and_rel_extraction_prompt
 from models import KGList, Entity, Relationship
 
+
+nlp = spacy.load("en_core_web_sm")
+model = SentenceTransformer("all-MiniLM-L6-v2")
 
 def extract_kg(model: models.Model, text: str, kg: Optional[KGList] = None):
     """Extracts nodes and edges from text using a guidance model"""
@@ -14,11 +21,13 @@ def extract_kg(model: models.Model, text: str, kg: Optional[KGList] = None):
     return KGList(**json.loads(lm['kg_list']))
 
 
-def clean_extracted_kg(kg: KGList) -> KGList:
+def clean_extracted_kg(kg: KGList, timestamp: int) -> KGList:
     """Cleans KG output from LLM"""
-    entites_clean = clean_entities(KGList['entities'])
-    relationships_clean = clean_relationships(KGList['relationships'], entites_clean)
-    return KGList(entities=entites_clean, relatonships=relationships_clean)
+    entites_clean = clean_entities(kg.entities)
+    relationships_clean = clean_relationships(kg.relationships, entites_clean)
+    for r in relationships_clean:
+        r.timestep = timestamp
+    return KGList(entities=entites_clean, relationships=relationships_clean)
 
 
 def clean_entities(entities: List[Entity]) -> List[Entity]:
@@ -43,9 +52,41 @@ def clean_relationships(relationships: List[Relationship], entities: List[Entity
 
 def get_entities(text: str) -> List[str]:
     """Get entities from text"""
-    raise NotImplementedError
+    doc = nlp(text)
+    ents = [ent.text for ent in doc.ents]
+    return ents
 
 
-def get_subkg(kg: KGList, entities: str) -> KGList:
+def get_subkg(kg: KGList, entities: List[str], threshold:float = 0.8) -> KGList:
     """Get sub graph that contains given entities"""
+    # get embeddings
+    entity_embeddings = model.encode([e.entity_name + ' ' + e.entity_description for e in kg.entities])
+    node_embeddings = model.encode([e.entity_name + ' ' + e.entity_description for e in kg.entities])
+    
+    # get kg entities that appear in enetities by using simialrity threshold as a proxy
+    sim = cosine_similarity(node_embeddings, entity_embeddings)
+    indices = np.argwhere(np.max(sim, axis=1) > threshold).flatten()
+    kg_entities = [kg.entities[i] for i in indices]
+    kg_relationships = []
+    for r in kg.relationships:
+        for e in kg_entities:
+            if r.contains_entity(e):
+                kg_relationships.append(r)
+                break
+    return KGList(entities=kg_entities, relationships=kg_relationships)
+
+
+def kg_to_nl(kg: KGList) -> str:
+    rep = ''
+    for r in kg.relationships:
+        rep += str(r) + '. '
+    return rep
+
+
+def merge_kg(main_kg: KGList, sub_kg: KGList) -> KGList:
+    """"Merges sub_kg in to main_kg"""
+    main_kg_entity_embeddings = model.encode([e.entity_name + ' ' + e.entity_description for e in main_kg.entities])
+    sub_kg_entity_embeddings = model.encode([e.entity_name + ' ' + e.entity_description for e in sub_kg.entities])
+    
     raise NotImplementedError
+

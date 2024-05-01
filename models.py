@@ -38,6 +38,12 @@ class Relationship(BaseModel):
     entity_subject_name: str
     entity_predicate_name: RelationshipType
     entity_object_name: str
+    timestep: int = -1
+
+    def contains_entity(self, e: Entity):
+        if e.entity_name == self.entity_object_name or e.entity_name == self.entity_subject_name:
+            return True
+        return False
 
     def __eq__(self, other):
         if self.entity_subject_name == other.entity_subject_name and self.entity_predicate_name == other.entity_predicate_name and self.entity_object_name == other.entity_object_name:
@@ -47,10 +53,16 @@ class Relationship(BaseModel):
     def __hash__(self):
         return hash(self.entity_subject_name+self.entity_predicate_name+self.entity_object_name)
 
+    def __str__(self):
+        return f"At timestep {self.timestep}, {self.entity_subject_name} has a relation type called '{self.entity_predicate_name.replace('_', ' ')}' to {self.entity_object_name }"
+    
+    def __repr__(self):
+        return f"At timestep {self.timestep}, {self.entity_subject_name} has a relation type called '{self.entity_predicate_name.replace('_', ' ')}' to {self.entity_object_name }"
+
 
 class KGList(BaseModel):
-    entities: Annotated[list[Entity], Len(max_length=30)]
-    relationships: Annotated[list[Relationship], Len(max_length=50)]
+    entities: Annotated[list[Entity], Len(max_length=10)]
+    relationships: Annotated[list[Relationship], Len(max_length=20)]
 
 
 class NodeListStr(BaseModel):

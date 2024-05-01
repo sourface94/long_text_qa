@@ -1,3 +1,4 @@
 annotated-types
 guidance
 pydantic
+neo4j
