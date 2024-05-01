@@ -11,9 +11,9 @@ from sklearn.metrics.pairwise import cosine_similarity
 from prompts import node_and_rel_extraction_prompt
 from models import KGList, Entity, Relationship
 
-
 nlp = spacy.load("en_core_web_sm")
 model = SentenceTransformer("all-MiniLM-L6-v2")
+
 
 def extract_kg(model: models.Model, text: str, kg: Optional[KGList] = None):
     """Extracts nodes and edges from text using a guidance model"""
@@ -87,6 +87,11 @@ def merge_kg(main_kg: KGList, sub_kg: KGList) -> KGList:
     """"Merges sub_kg in to main_kg"""
     main_kg_entity_embeddings = model.encode([e.entity_name + ' ' + e.entity_description for e in main_kg.entities])
     sub_kg_entity_embeddings = model.encode([e.entity_name + ' ' + e.entity_description for e in sub_kg.entities])
+
+    # check if there are matching entities
+    # for the matching entities then replace the entitiy names in the sub graph with the name in the main graph
+    # for each relationship check if a duplicate (minus timestamp) exists in the subgraph. if it doesnt add it. if it does chck if the most recent relationship between the two nodes is the same, if it is dont add it, if it isnt add it
+    # for entities that dont match, add the entity. for the entities relationsships check if identical relationship alrerady exists, if it does dont add it, otherwise add it
     
     raise NotImplementedError
 
