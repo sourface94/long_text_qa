@@ -1,13 +1,6 @@
-import json
-from typing import List
+from guidance import models
 
-import guidance
-from guidance import models, select, system, user, assistant, gen
-from guidance.models import Model
-from pydantic import BaseModel
-
-from kg import extract_kg, clean_extracted_kg, get_entities, get_subkg, kg_to_nl, extract_kg_with_subkg, merge_kg
-from models import KGList
+from kg import extract_kg, clean_extracted_kg, get_entities, get_subkg, extract_kg_with_subkg, merge_kg
 
 
 with open('data/monte.txt', 'r', encoding="utf8") as file:
