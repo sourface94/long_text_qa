@@ -98,13 +98,13 @@ def get_merged_entity_relationships(
     new_rels = []
     for r in kg.relationships:
         match = False
-        if r.entity_object_name == entity_b.name:
+        if r.entity_object_name == entity_b.entity_name:
             match = True
-            r.entity_object_name == entity_a.name
+            r.entity_object_name == entity_a.entity_name
 
-        if r.entity_subject_name == entity_b.name:
+        if r.entity_subject_name == entity_b.entity_name:
             match = True
-            r.entity_subject_name == entity_a.name
+            r.entity_subject_name == entity_a.entity_name
 
         if match:
             new_rels.append(r)
@@ -116,7 +116,7 @@ def get_entities_relationships(entity: Entity, kg: KGList):
     rels = []
     for r in kg.relationships:
         match = False
-        if r.entity_object_name == entity.name or r.entity_subject_name == entity.name:
+        if r.entity_object_name == entity.entity_name or r.entity_subject_name == entity.entity_name:
             rels.append(r)
     return rels
 
@@ -134,16 +134,18 @@ def merge_kg(main_kg: KGList, sub_kg: KGList) -> KGList:
     for indx, i in enumerate(sim):
         for indj,  j in enumerate(i):
             if sim[indx, indj] >= 0.9 and indj not in merged:
+                print('EEEE1', main_kg.entities[indx], 'EEEE2', sub_kg.entities[indj])
                 merged.append(j)
-                new_rels = get_merged_entity_relationships(main_kg.enetities[indx], sub_kg.enetities[indj], sub_kg)
+                new_rels = get_merged_entity_relationships(main_kg.entities[indx], sub_kg.entities[indj], sub_kg)
                 main_kg.relationships += new_rels
-                main_kg.enetities[indx].entity_description += '. ' += main_kg.enetities[indj].entity_description
+                main_kg.entities[indx].entity_description += '. ' + main_kg.entities[indj].entity_description
 
 
     for indx, e in enumerate(sub_kg.entities):
         if indx not in merged:
+            print('adding entity')
             rels = get_entities_relationships(e, sub_kg)
+            main_kg.entities.append(e)
             main_kg.relationships += rels
-
     return clean_extracted_kg(main_kg)
     

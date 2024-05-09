@@ -61,7 +61,7 @@ class Relationship(BaseModel):
 
 
 class KGList(BaseModel):
-    entities: Annotated[list[Entity], Len(max_length=10)]
+    entities: Annotated[list[Entity], Len(max_length=50)]
     relationships: Annotated[list[Relationship], Len(max_length=20)]
 
 
