@@ -8,25 +8,32 @@ from guidance import models
 from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
 
-from prompts import node_and_rel_extraction_prompt
+from prompts import node_and_rel_extraction_prompt, node_and_rel_extraction_with_subkg_prompt
 from models import KGList, Entity, Relationship
 
 nlp = spacy.load("en_core_web_sm")
 model = SentenceTransformer("all-MiniLM-L6-v2")
 
 
-def extract_kg(model: models.Model, text: str, kg: Optional[KGList] = None):
+def extract_kg(model: models.Model, text: str):
     """Extracts nodes and edges from text using a guidance model"""
     lm = model + node_and_rel_extraction_prompt.format(chunk=text) + guidance.json(name="kg_list", schema=KGList)
     return KGList(**json.loads(lm['kg_list']))
 
 
-def clean_extracted_kg(kg: KGList, timestamp: int) -> KGList:
+def extract_kg_with_subkg(model: models.Model, text: str, kg: KGList):
+    """Extracts nodes and edges from text using a guidance model"""
+    lm = model + node_and_rel_extraction_with_subkg_prompt.format(chunk=text, subkg=kg_to_nl(kg)) + guidance.json(name="kg_list", schema=KGList)
+    return KGList(**json.loads(lm['kg_list']))
+
+
+def clean_extracted_kg(kg: KGList, timestamp: Optional[int] = None) -> KGList:
     """Cleans KG output from LLM"""
     entites_clean = clean_entities(kg.entities)
     relationships_clean = clean_relationships(kg.relationships, entites_clean)
-    for r in relationships_clean:
-        r.timestep = timestamp
+    if timestamp is not None:
+        for r in relationships_clean:
+            r.timestep = timestamp
     return KGList(entities=entites_clean, relationships=relationships_clean)
 
 
@@ -53,16 +60,16 @@ def clean_relationships(relationships: List[Relationship], entities: List[Entity
 def get_entities(text: str) -> List[str]:
     """Get entities from text"""
     doc = nlp(text)
-    ents = [ent.text for ent in doc.ents]
+    ents = list(set([ent.text for ent in doc.ents]))
     return ents
 
 
-def get_subkg(kg: KGList, entities: List[str], threshold: float = 0.8) -> KGList:
+def get_subkg(kg: KGList, entities: List[str], threshold: float = 0.7) -> KGList:
     """Get sub graph that contains given entities"""
     # get embeddings
     entity_embeddings = model.encode([e for e in entities])
     node_embeddings = model.encode([e.entity_name + ' ' + e.entity_description for e in kg.entities])
-    
+    print([e.entity_name + ' ' + e.entity_description for e in kg.entities])
     # get kg entities that appear in enetities by using simialrity threshold as a proxy
     sim = cosine_similarity(node_embeddings, entity_embeddings)
     indices = np.argwhere(np.max(sim, axis=1) >= threshold).flatten()
@@ -83,15 +90,60 @@ def kg_to_nl(kg: KGList) -> str:
     return rep
 
 
+def get_merged_entity_relationships(
+    entity_a: Entity, 
+    entity_b: Entity, 
+    kg: KGList
+):
+    new_rels = []
+    for r in kg.relationships:
+        match = False
+        if r.entity_object_name == entity_b.name:
+            match = True
+            r.entity_object_name == entity_a.name
+
+        if r.entity_subject_name == entity_b.name:
+            match = True
+            r.entity_subject_name == entity_a.name
+
+        if match:
+            new_rels.append(r)
+
+    return new_rels
+
+
+def get_entities_relationships(entity: Entity, kg: KGList):
+    rels = []
+    for r in kg.relationships:
+        match = False
+        if r.entity_object_name == entity.name or r.entity_subject_name == entity.name:
+            rels.append(r)
+    return rels
+
 def merge_kg(main_kg: KGList, sub_kg: KGList) -> KGList:
     """"Merges sub_kg in to main_kg"""
-    main_kg_entity_embeddings = model.encode([e.entity_name + ' ' + e.entity_description for e in main_kg.entities])
-    sub_kg_entity_embeddings = model.encode([e.entity_name + ' ' + e.entity_description for e in sub_kg.entities])
-
     # check if there are matching entities
     # for the matching entities then replace the entitiy names in the sub graph with the name in the main graph
     # for each relationship check if a duplicate (minus timestamp) exists in the subgraph. if it doesnt add it. if it does chck if the most recent relationship between the two nodes is the same, if it is dont add it, if it isnt add it
     # for entities that dont match, add the entity. for the entities relationsships check if identical relationship alrerady exists, if it does dont add it, otherwise add it
-    
-    raise NotImplementedError
 
+    main_kg_entity_embeddings = model.encode([e.entity_name + ' ' + e.entity_description for e in main_kg.entities])
+    sub_kg_entity_embeddings = model.encode([e.entity_name + ' ' + e.entity_description for e in sub_kg.entities])
+    sim = cosine_similarity(main_kg_entity_embeddings, sub_kg_entity_embeddings)
+    merged = []
+    for indx, i in enumerate(sim):
+        for indj,  j in enumerate(i):
+            if sim[indx, indj] >= 0.9 and indj not in merged:
+                merged.append(j)
+                new_rels = get_merged_entity_relationships(main_kg.enetities[indx], sub_kg.enetities[indj], sub_kg)
+                main_kg.relationships += new_rels
+                main_kg.enetities[indx].entity_description += '. ' += main_kg.enetities[indj].entity_description
+
+
+    for indx, e in enumerate(sub_kg.entities):
+        if indx not in merged:
+            rels = get_entities_relationships(e, sub_kg)
+            main_kg.relationships += rels
+
+    return clean_extracted_kg(main_kg)
+    
